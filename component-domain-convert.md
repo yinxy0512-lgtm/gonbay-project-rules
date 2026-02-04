@@ -321,9 +321,82 @@ public PageResult<Entity> queryWithFormCondition(PageRequestForm<FormCondition> 
 
 ---
 
-## 7. 使用场景
+## 7. 批量 DTO 转 Domain 的 Convert 实现方式
 
-### 7.1 适用场景
+当批量插入场景存在「批量 DTO（公共属性 + 集合）」且需在 Convert 中完成公共属性与派生字段（如 createTime）赋值时，可采用以下两种实现方式。
+
+### 7.1 方式一：批量 default 方法内集中赋值
+
+**做法**：单条映射方法仅做「项 DTO → Domain」字段映射（不含 createTime、公共 ID 等）；批量 default 方法内循环调用单条映射后，在同一处对每条 Domain 统一 `setCreateTime`、`setDagInstanceId`、`setDagType` 等。
+
+**示例（简化）**：
+```java
+TaskTimeCheckpoint itemDtoToDomain(TaskTimeCheckpointItemDTO item);  // 仅映射 item 字段
+
+default List<TaskTimeCheckpoint> batchDtoToDomains(TaskTimeCheckpointBatchDTO dto) {
+    // ...
+    for (TaskTimeCheckpointItemDTO item : dto.getCheckpoints()) {
+        TaskTimeCheckpoint domain = itemDtoToDomain(item);
+        domain.setDagInstanceId(dto.getDagInstanceId());
+        domain.setDagType(dto.getDagType());
+        domain.setCreateTime(TimeUtil.now());
+        list.add(domain);
+    }
+    return list;
+}
+```
+
+| 维度 | 说明 |
+|------|------|
+| **优点** | 批量逻辑集中在一个 default 方法；单条 `itemDtoToDomain` 保持纯 MapStruct 生成，只做字段映射；实现简单 |
+| **缺点** | createTime、公共 ID 等均在 default 里手写 set，未通过 `@Mapping` 声明，可读性、可追溯性略弱；若单条也需要「带公共信息」转换，须在 Service 或另写方法 |
+
+### 7.2 方式二：单条用 @Mapping 设 createTime，拆出「带公共信息」default 方法
+
+**做法**：单条映射方法用 `@Mapping(target = "createTime", expression = "java(TimeUtil.now())")` 统一设置 createTime；再提供 default 方法「项 DTO + 公共参数 → Domain」，内部调用单条映射后仅 `setDagInstanceId`、`setDagType`；批量 default 方法只做遍历与调用该「带公共信息」方法并收集结果。
+
+**示例（简化）**：
+```java
+@Mapping(target = BaseModel.Fields.createTime, expression = "java(TimeUtil.now())")
+TaskTimeCheckpoint itemDtoToDomain(TaskTimeCheckpointItemDTO item);
+
+default TaskTimeCheckpoint itemDtoDagInfoToDomain(TaskTimeCheckpointItemDTO item, String dagType, Long dagInstanceId) {
+    TaskTimeCheckpoint result = itemDtoToDomain(item);
+    result.setDagInstanceId(dagInstanceId);
+    result.setDagType(dagType);
+    return result;
+}
+
+default List<TaskTimeCheckpoint> batchDtoToDomains(TaskTimeCheckpointBatchDTO dto) {
+    // ...
+    for (TaskTimeCheckpointItemDTO item : dto.getCheckpoints()) {
+        TaskTimeCheckpoint domain = itemDtoDagInfoToDomain(item, dto.getDagType(), dto.getDagInstanceId());
+        list.add(domain);
+    }
+    return list;
+}
+```
+
+| 维度 | 说明 |
+|------|------|
+| **优点** | createTime 由 MapStruct 注解统一设置，与 BaseModel 约定一致、语义清晰；「带公共信息」的 `itemDtoDagInfoToDomain` 可复用于单条与批量；`batchDtoToDomains` 只做遍历与收集，职责单一 |
+| **缺点** | 多一个 default 方法；dagInstanceId、dagType 仍为手写 set，若需完全由 MapStruct 表达可考虑多参数映射方法（如 `itemDtoToDomain(ItemDTO item, Long dagInstanceId, String dagType)` 并配合 `@Mapping(target = "dagInstanceId", source = "dagInstanceId")`） |
+
+### 7.3 规则与推荐
+
+**规则**
+- ✅ 批量 DTO 转 Domain 列表应在 Convert 中完成，Service 只负责调用 `batchDtoToDomains(dto)` 与 `saveBatch(list)`，不在 Service 内循环赋值公共/派生字段
+- ✅ 与 BaseModel 相关的字段（如 createTime）优先在 MapStruct 方法上通过 `@Mapping` 或 `expression` 声明，便于统一约定与检索
+- ✅ 若存在「单条 + 批量」共用「带公共信息」的转换，推荐拆出独立的 default 方法（如 `itemDtoDagInfoToDomain`），避免在 Service 中重复写 set
+
+**推荐**
+- 优先采用 **方式二**：createTime 用 `@Mapping` 表达，公共 ID 等通过「带公共信息」的 default 方法封装，批量方法只做遍历与收集，结构更清晰、可维护性更好
+
+---
+
+## 8. 使用场景
+
+### 8.1 适用场景
 
 - ✅ DTO 与 Entity 之间的转换
 - ✅ Entity 与 VO 之间的转换
@@ -331,7 +404,7 @@ public PageResult<Entity> queryWithFormCondition(PageRequestForm<FormCondition> 
 - ✅ 元数据解析（视图字段、查询字段）
 - ✅ 快速查询封装
 
-### 7.2 禁止场景
+### 8.2 禁止场景
 
 - ❌ 禁止在转换器中编写业务逻辑
 - ❌ 禁止手动编写对象转换代码
@@ -339,9 +412,9 @@ public PageResult<Entity> queryWithFormCondition(PageRequestForm<FormCondition> 
 
 ---
 
-## 8. 示例代码
+## 9. 示例代码
 
-### 8.1 MapStruct 转换器完整示例
+### 9.1 MapStruct 转换器完整示例
 
 ```java
 @Mapper(
@@ -400,7 +473,7 @@ public interface BehaviorRuleConvert {
 }
 ```
 
-### 8.2 查询条件 DTO 完整示例
+### 9.2 查询条件 DTO 完整示例
 
 ```java
 public class PendingTaskDTO {
@@ -433,7 +506,7 @@ public class PendingTaskDTO {
 
 ---
 
-## 9. 违规处理
+## 10. 违规处理
 
 如果发现违反本规则的情况：
 1. 立即停止当前操作
@@ -442,7 +515,7 @@ public class PendingTaskDTO {
 
 ---
 
-## 10. 规则优先级
+## 11. 规则优先级
 
 本规则优先级：**高**
 - 与其他规则冲突时，以本规则为准

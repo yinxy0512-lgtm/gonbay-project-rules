@@ -24,7 +24,7 @@
 - ✅ 保持 import 语句的整洁和有序
 
 **禁止行为**
-- ❌ 禁止在代码中使用全类名引用（如 `net.gonbay.app.task.engine.vo.TaskTimeCalculationVO`）
+- ❌ 禁止在代码中使用全类名引用（如 `net.gonbay.app.task.engine.vo.TaskForecastVO`）
 - ❌ 禁止在方法参数、返回类型、变量声明中使用全类名
 - ❌ 禁止在类型转换、instanceof 判断中使用全类名
 - ❌ 禁止在泛型参数中使用全类名
@@ -93,10 +93,10 @@ public void identifyCriticalPaths(List<TaskPathVO> paths, Map<Long, Object> time
         boolean isCritical = path.getPathNodes().stream()
             .allMatch(taskId -> {
                 Object calculation = timeCalculations.get(taskId);
-                if (calculation instanceof net.gonbay.app.task.engine.vo.TaskTimeCalculationVO) {
+                if (calculation instanceof net.gonbay.app.task.engine.vo.TaskForecastVO) {
                     // 错误：instanceof 使用全类名
-                    net.gonbay.app.task.engine.vo.TaskTimeCalculationVO calc = 
-                        (net.gonbay.app.task.engine.vo.TaskTimeCalculationVO) calculation;
+                    net.gonbay.app.task.engine.vo.TaskForecastVO calc = 
+                        (net.gonbay.app.task.engine.vo.TaskForecastVO) calculation;
                     // 错误：类型转换使用全类名
                     return calc.getTotalFloat() != null && calc.getTotalFloat().compareTo(BigDecimal.ZERO) == 0;
                 }
@@ -110,7 +110,7 @@ public void identifyCriticalPaths(List<TaskPathVO> paths, Map<Long, Object> time
 
 ```java
 import net.gonbay.app.task.engine.vo.TaskPathVO;
-import net.gonbay.app.task.engine.vo.TaskTimeCalculationVO;
+import net.gonbay.app.task.engine.vo.TaskForecastVO;
 
 public void identifyCriticalPaths(List<TaskPathVO> paths, Map<Long, Object> timeCalculations) {
     for (TaskPathVO path : paths) {
@@ -138,7 +138,7 @@ public void example() {
     List<net.gonbay.app.task.engine.vo.TaskPathVO> paths = pathCalculationService.calculateAllPaths(instanceId, graph);
     // 错误：泛型参数使用全类名
     
-    Map<Long, net.gonbay.app.task.engine.vo.TaskTimeCalculationVO> timeCalculations = 
+    Map<Long, net.gonbay.app.task.engine.vo.TaskForecastVO> timeCalculations = 
         timeCalculationService.calculateAllTaskTimes(instanceId, graph);
     // 错误：泛型参数使用全类名
 }
@@ -148,7 +148,7 @@ public void example() {
 
 ```java
 import net.gonbay.app.task.engine.vo.TaskPathVO;
-import net.gonbay.app.task.engine.vo.TaskTimeCalculationVO;
+import net.gonbay.app.task.engine.vo.TaskForecastVO;
 
 public void example() {
     List<TaskPathVO> paths = pathCalculationService.calculateAllPaths(instanceId, graph);
@@ -671,3 +671,98 @@ public class TaskInstance extends BaseModel {
 - ✅ 所有 DTO 类属性都有清晰的 JavaDoc 注释
 - ✅ 所有 VO 类属性都有清晰的 JavaDoc 注释
 - ✅ 所有 Domain 类属性都有清晰的 JavaDoc 注释
+- ✅ Service 之间无循环依赖（见第 8 节）
+
+---
+
+## 8. 循环依赖规避规范
+
+### 8.1 规则说明
+
+Spring 容器中，若 A 依赖 B、B 又依赖 A（或 A→B→C→A），会形成循环依赖，导致启动失败或行为异常。状态类、编排类 Service 之间尤其容易出现互相引用。本规则要求：**禁止 Service 之间形成循环依赖**；**获取实体（instance、task 等）的职责放在调用方，通过参数传入，状态/编排服务内部不再按 ID 反查**。
+
+### 8.2 必须遵守的规则
+
+**必须遵守**
+- ✅ Service 实现类之间不得形成环状依赖（A 注入 B 且 B 注入 A，或更长环路）。
+- ✅ 状态/编排类服务（如任务状态、实例状态）若需要「当前实例、当前任务或列表」，应由**调用方**先查询，再通过方法参数传入；服务内部仅做校验、更新与发事件，不再为同一业务动作重复 getById/list。
+- ✅ 若存在「A 需调 B、B 又需调 A」的业务逻辑，应拆分为：调用方先调 A、再调 B（或通过事件/监听器在另一侧执行），或将一方改为仅接收参数、由调用方负责取数后传入。
+- ✅ 未使用的 Service 注入应移除，避免无意义的依赖链。
+
+**禁止行为**
+- ❌ 禁止两个及以上 Service 实现类互相注入（如 TaskStatusServiceImpl 注入 TaskInstanceStatusService，TaskInstanceStatusServiceImpl 又注入 TaskStatusService）。
+- ❌ 禁止在状态/编排服务内部仅为了校验或判断而再次按 ID 查询调用方已持有的实体（导致重复查询且易形成循环依赖）。
+- ❌ 禁止保留未被调用的 Service 依赖（死注入）。
+
+### 8.3 推荐做法
+
+- **参数化**：状态服务接口设计为接收「实体或实体列表」入参，例如 `startInstance(TaskInstance instance)`、`checkAndUpdateToPendingComplete(TaskInstance instance, List<Task> tasks)`，由 Controller/Server 或监听器先查 instance/tasks 再调用。
+- **职责拆分**：例如「取消实例」时，由调用方先对实例下所有任务调用任务状态服务更新为取消，再调用实例状态服务仅更新实例并发事件；实例状态服务不再依赖任务状态服务。
+- **事件解耦**：若「任务完成」后需触发「检查实例是否待完成」，可由任务状态服务只发布事件，由监听器查询 instance 与 rootTasks 后调用实例状态服务，避免任务状态服务直接依赖实例状态服务。
+
+### 8.4 正例与反例
+
+**❌ 反例：Service 互相注入且内部重复查库**
+
+```java
+// TaskInstanceStatusServiceImpl 内
+@Autowired
+private TaskStatusService taskStatusService;
+
+public void cancelInstance(Long instanceId) {
+    TaskInstance taskInstance = taskInstanceService.getById(instanceId);  // 内部查 instance
+    List<Task> tasks = taskService.list(...);                             // 内部查 tasks
+    for (Task task : tasks) {
+        taskStatusService.updateTaskStatus(task.getId(), ...);            // 依赖 TaskStatusService，易形成循环
+    }
+    // ...
+}
+
+// TaskStatusServiceImpl 内
+@Autowired
+private TaskInstanceStatusService taskInstanceStatusService;
+
+public void completeTask(Long taskId, ...) {
+    Task task = taskService.getById(taskId);
+    // ...
+    taskInstanceStatusService.checkAndUpdateToPendingComplete(task.getInstanceId());  // 又依赖 TaskInstanceStatusService → 循环
+}
+```
+
+**✅ 正例：调用方取数传参，状态服务不互相依赖**
+
+```java
+// 接口：以实体入参，由调用方取数
+void cancelInstance(TaskInstance instance);
+void checkAndUpdateToPendingComplete(TaskInstance instance, List<Task> tasks);
+
+// TaskInstanceStatusServiceImpl：不再注入 TaskStatusService，不再 getById(instanceId)/list(tasks)
+public void cancelInstance(TaskInstance instance) {
+    // 仅更新 instance、发事件；任务的取消由调用方先调 TaskStatusService
+}
+
+// TaskInstanceServer（调用方）：先查 instance 和 tasks，再分别调任务状态与实例状态
+public void cancelInstance(Long instanceId) {
+    TaskInstance instance = taskInstanceService.getById(instanceId);
+    List<Task> tasks = taskService.list(taskConverter.toQueryWrapperByInstanceId(instanceId));
+    for (Task task : tasks) {
+        taskStatusService.updateTaskStatus(task.getId(), CALCELED.name(), CANCELLED.name());
+    }
+    taskInstanceStatusService.cancelInstance(instance);
+}
+
+// TaskStatusServiceImpl：不再注入 TaskInstanceStatusService；实例待完成由监听器查 instance+rootTasks 后调用
+// 监听器内：
+TaskInstance instance = taskInstanceService.getById(instanceId);
+List<Task> rootTasks = taskService.list(taskConverter.toQueryWrapperRootTasksByInstanceId(instanceId));
+taskInstanceStatusService.checkAndUpdateToPendingComplete(instance, rootTasks);
+```
+
+### 8.5 违规处理
+
+若发现 Service 间存在循环依赖或违反「调用方取数传参」的用法：
+1. 将「获取 instance/task」的职责上移到调用方（Controller/Server 或事件监听器）。
+2. 状态/编排服务接口改为接收实体或实体列表入参，实现类去掉对另一状态服务的依赖。
+3. 移除未使用的 Service 注入。
+4. 必要时用事件+监听器拆开双向调用，保证依赖为单向。
+

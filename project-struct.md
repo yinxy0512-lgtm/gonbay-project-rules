@@ -49,10 +49,18 @@ gonbay-{project}
 **说明**
 - 严格按照相同结构构建项目
 - gonbay-{project} 项目根目录
-- gonbay-{project}-common 该模块存放当前项目中公共的代码文件例如（doma、nerror、enum）
-- gonbay-{project}-api 该模块存放所有对外暴漏的 api 接口
-- gonbay-{project}-service 该模块存放所有业务逻辑实现和 orm 交互是整个项目最核心的模块
-- gonbay-{project}-server 该模块只负责写单元测试，只对 gonbay-{project}-service 依赖
+- gonbay-{project}-common 该模块存放当前项目中公共的代码文件例如（domain、errcode、enums、constat 等）
+- gonbay-{project}-api 该模块存放所有对外暴露的 api 接口、dto、vo
+- gonbay-{project}-service 该模块存放所有业务逻辑实现和 orm 交互，是整个项目最核心的模块
+- gonbay-{project}-server 该模块只负责写单元测试，只对 gonbay-{project}-service 依赖；可仅有 src/main/resources（如 application.yml）和 src/test，无 src/main/java 或可执行入口，禁止擅自添加 Spring Boot 启动类或打包插件
+
+**当前项目参考（gonbay-task-engine）**
+- 根：groupId=`net.gonbay.app.task.engine`，artifactId=`gonbay-task-engine`；parent=gonbay-core
+- common：仅依赖 gonbay-basic-util；无 gonbay-common
+- api：依赖 common、gonbay-basic-util、spring-cloud-openfeign-core、spring-boot-starter-validation
+- service：依赖 api、gonbay-repository、gonbay-log、mysql-connector-java、gonbay-redisson、gonbay-cloud
+- server：仅依赖 gonbay-task-engine-service；无 build/plugin、无 webflux/loadbalancer
+- 生成或修改 pom 时必须以本仓库现有各模块 pom.xml 为准，不得套用其它项目模板。
 
 
 ### 2.2 模块中的包结构和职责划分
@@ -90,10 +98,29 @@ gonbay-{project}
 - ✅ 禁止将不属于一个职责的类放在其他职责的包中
 
 
-## 2.3pom的模板生成规则
-**pom.xml的模板规范**
+## 2.3 POM 的模板生成规则
 
-> gonbay-{project}/pom.xml pom模板代码示例
+### 2.3.0 命名与引用约定（强制）
+
+**groupId**
+- 格式：`net.gonbay.app.{业务域}`，业务域为多级时用点号，例如 `net.gonbay.app.task.engine`。
+- 所有子模块的 groupId 与根 POM 的 groupId 必须一致。
+- ❌ 禁止使用 `net.gonbay.app.dictionary` 等其它项目占位符；禁止 groupId 与根 POM 不一致。
+
+**artifactId 与 parent 引用**
+- 根模块：`gonbay-{project}`（如 gonbay-task-engine）。根目录名、根 pom 的 `<artifactId>`、子模块 `<parent><artifactId>` 必须一致。
+- common：`gonbay-{project}-common`。
+- api：`gonbay-{project}-api`。
+- service：`gonbay-{project}-service`。
+- server：`gonbay-{project}-server`。
+- ❌ 禁止使用 `gonbay-platform-{project}`、`gonbay-platform-{project}-common`、`gonbay-platform-{project}-api` 等任何带 `platform` 的 artifactId 或 parent 引用。
+
+**版本**
+- 子模块版本与根一致，使用 `1.0-SNAPSHOT` 或由父管理；子模块间依赖统一使用 `${project.parent.version}`，禁止写死其它项目的版本占位。
+
+---
+
+**根 pom：gonbay-{project}/pom.xml**
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
@@ -101,7 +128,6 @@ gonbay-{project}
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <!-- 继承 gonbay-core: 具备组件的最基本的依赖 -->
     <parent>
         <groupId>net.gonbay</groupId>
         <artifactId>gonbay-core</artifactId>
@@ -109,23 +135,25 @@ gonbay-{project}
         <relativePath></relativePath>
     </parent>
 
-    <groupId>net.gonbay.app.dictionary</groupId>
-    <artifactId>gonbay-{project}</artifactId>
-    <version>1.0-SNAPSHOT</version>
     <packaging>pom</packaging>
-    <name>gonbay-{project}</name>
 
-    <!-- 集中管理子模块的构建生命周期 -->
     <modules>
         <module>gonbay-{project}-common</module>
         <module>gonbay-{project}-api</module>
         <module>gonbay-{project}-service</module>
         <module>gonbay-{project}-server</module>
     </modules>
+
+    <groupId>net.gonbay.app.{业务域}</groupId>
+    <artifactId>gonbay-{project}</artifactId>
+    <version>1.0-SNAPSHOT</version>
 </project>
 ```
 
-> gonbay-{project}-common/pom.xml pom模板代码示例
+**common：gonbay-{project}-common/pom.xml**
+- parent 必须为：`groupId` = 根 groupId，`artifactId` = `gonbay-{project}`，`relativePath` = `../pom.xml`。
+- artifactId 必须为 `gonbay-{project}-common`，name 为 `gonbay-{project}-common`。
+- 依赖：仅允许项目已使用的公共组件（如 `gonbay-basic-util` 或 `gonbay-common` 之一，按项目现有约定）。禁止擅自改为未在项目中使用的 artifact。
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
@@ -133,72 +161,71 @@ gonbay-{project}
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <!-- 继承 gonbay-{project} -->
     <parent>
-        <groupId>net.gonbay.app.{project}</groupId>
-        <artifactId>gonbay-platform-{project}</artifactId>
+        <groupId>net.gonbay.app.{业务域}</groupId>
+        <artifactId>gonbay-{project}</artifactId>
         <version>1.0-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <groupId>net.gonbay.app.{project}</groupId>
-    <artifactId>gonbay-platform-{project}-common</artifactId>
+    <groupId>net.gonbay.app.{业务域}</groupId>
+    <artifactId>gonbay-{project}-common</artifactId>
     <version>1.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <name>gonbay-{project}-common</name>
-    <description>项目的详情</description>
+    <description>项目公共模块</description>
 
-    <!-- 依赖核心组件 gonbay-common -->
     <dependencies>
         <dependency>
             <groupId>net.gonbay</groupId>
-            <artifactId>gonbay-common</artifactId>
+            <artifactId>gonbay-basic-util</artifactId>
             <version>1.0-SNAPSHOT</version>
         </dependency>
     </dependencies>
 </project>
 ```
-> gonbay-{project}-api/pom.xml pom模板代码示例
+
+**api：gonbay-{project}-api/pom.xml**
+- parent 同上；artifactId = `gonbay-{project}-api`，name = `gonbay-{project}-api`。
+- 依赖：本项目的 common、gonbay-basic-util（版本用 `${project.parent.version}`）、Feign 声明（使用 `spring-cloud-openfeign-core`，或项目已采用的 Feign 依赖）、`spring-boot-starter-validation`。禁止使用项目未采用的 Feign 依赖（如擅自改为 spring-cloud-starter-openfeign 等）。
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-    <!-- 继承 gonbay-{project} -->
+
     <parent>
-        <groupId>net.gonbay.app.{project}</groupId>
+        <groupId>net.gonbay.app.{业务域}</groupId>
         <artifactId>gonbay-{project}</artifactId>
         <version>1.0-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
-    <groupId>net.gonbay.app.{project}</groupId>
+
+    <groupId>net.gonbay.app.{业务域}</groupId>
     <artifactId>gonbay-{project}-api</artifactId>
     <version>1.0-SNAPSHOT</version>
     <packaging>jar</packaging>
-    <name>gonbay-platform-{project}-api</name>
-    <description>项目的详情描述</description>
+
+    <name>gonbay-{project}-api</name>
+    <description>对外 API 模块</description>
+
     <dependencies>
-        <!-- {project} common -->
         <dependency>
-            <groupId>net.gonbay.app.{project}</groupId>
+            <groupId>net.gonbay.app.{业务域}</groupId>
             <artifactId>gonbay-{project}-common</artifactId>
             <version>${project.parent.version}</version>
         </dependency>
-        <!-- 核心组件工具 -->
         <dependency>
             <groupId>net.gonbay</groupId>
             <artifactId>gonbay-basic-util</artifactId>
             <version>${project.parent.version}</version>
         </dependency>
-        <!-- 支持feign接口声明 -->
         <dependency>
             <groupId>org.springframework.cloud</groupId>
-            <artifactId>spring-cloud-starter-openfeign</artifactId>
-            <scope>provided</scope>
+            <artifactId>spring-cloud-openfeign-core</artifactId>
         </dependency>
-        <!-- 增加对验证支持 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>
@@ -207,7 +234,9 @@ gonbay-{project}
 </project>
 ```
 
-> gonbay-{project}-api/pom.xml pom模板代码示例
+**service：gonbay-{project}-service/pom.xml**
+- parent 同上；artifactId = `gonbay-{project}-service`。
+- 依赖：本项目的 api（`${project.parent.version}`）、gonbay-repository、gonbay-log、mysql-connector-java(8.0.33)、gonbay-redisson、gonbay-cloud。禁止擅自增删上述已约定的依赖。
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
@@ -215,52 +244,42 @@ gonbay-{project}
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <!-- 继承 gonbay-platform-dictionary -->
     <parent>
-        <groupId>net.gonbay.app.{project}</groupId>
+        <groupId>net.gonbay.app.{业务域}</groupId>
         <artifactId>gonbay-{project}</artifactId>
         <version>1.0-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <groupId>net.gonbay.app.{project}</groupId>
+    <groupId>net.gonbay.app.{业务域}</groupId>
     <artifactId>gonbay-{project}-service</artifactId>
     <version>1.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <name>gonbay-{project}-service</name>
-    <description>项目描述详情</description>
+    <description>核心业务模块</description>
 
     <dependencies>
-        <!-- dictionary api -->
         <dependency>
-            <groupId>net.gonbay.app.{project}</groupId>
+            <groupId>net.gonbay.app.{业务域}</groupId>
             <artifactId>gonbay-{project}-api</artifactId>
             <version>${project.parent.version}</version>
         </dependency>
-
-        <!-- 依赖gonbay-repository -->
         <dependency>
             <groupId>net.gonbay</groupId>
             <artifactId>gonbay-repository</artifactId>
             <version>1.0-SNAPSHOT</version>
         </dependency>
-
-        <!-- 依赖gonbay-log -->
         <dependency>
             <groupId>net.gonbay</groupId>
             <artifactId>gonbay-log</artifactId>
             <version>1.0-SNAPSHOT</version>
         </dependency>
-
-        <!-- 依赖mysql驱动 -->
         <dependency>
             <groupId>mysql</groupId>
             <artifactId>mysql-connector-java</artifactId>
             <version>8.0.33</version>
         </dependency>
-
-        <!-- 依赖gonbay-redisson -->
         <dependency>
             <groupId>net.gonbay</groupId>
             <artifactId>gonbay-redisson</artifactId>
@@ -272,10 +291,14 @@ gonbay-{project}
             <version>1.0-SNAPSHOT</version>
         </dependency>
     </dependencies>
-
 </project>
 ```
-> gonbay-{project}-api/pom.xml pom模板代码示例
+
+**server：gonbay-{project}-server/pom.xml**
+- 职责：仅依赖 service、编写并运行对 service/api 的单元测试；可不包含可运行 Spring Boot 应用的 main 或打包配置。
+- parent 同上；artifactId = `gonbay-{project}-server`。
+- 依赖：仅允许 `gonbay-{project}-service`，版本使用 `${project.parent.version}`。
+- ❌ 禁止在未明确要求的前提下添加：spring-boot-maven-plugin、mainClass、spring-boot-starter-webflux、spring-cloud-starter-loadbalancer、finalName 等。若项目确需可运行 Server 应用，须按项目已有约定添加 build/依赖，不得套用其它项目的模板。
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
@@ -283,63 +306,45 @@ gonbay-{project}
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <!-- 继承 gonbay-platform-dictionary -->
     <parent>
-        <groupId>net.gonbay.app.{project}</groupId>
+        <groupId>net.gonbay.app.{业务域}</groupId>
         <artifactId>gonbay-{project}</artifactId>
         <version>1.0-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
-    <groupId>net.gonbay.app.{project}</groupId>
+
+    <groupId>net.gonbay.app.{业务域}</groupId>
     <artifactId>gonbay-{project}-server</artifactId>
     <version>1.0-SNAPSHOT</version>
     <packaging>jar</packaging>
+
     <name>gonbay-{project}-server</name>
-    <description>项目描述</description>
+    <description>服务端/测试模块</description>
+
     <dependencies>
-        <!-- 依赖service -->
         <dependency>
-            <groupId>net.gonbay.app.{project}</groupId>
+            <groupId>net.gonbay.app.{业务域}</groupId>
             <artifactId>gonbay-{project}-service</artifactId>
-            <version>1.0-SNAPSHOT</version>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-webflux</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.cloud</groupId>
-            <artifactId>spring-cloud-starter-loadbalancer</artifactId>
+            <version>${project.parent.version}</version>
         </dependency>
     </dependencies>
-        <build>
-        <finalName>gonbay-dict</finalName>
-        <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-                <configuration>
-                    <mainClass>net.gonbay.boot.ServerApplication</mainClass>        
-                </configuration>
-                <executions>
-                    <execution>
-                        <goals>
-                            <goal>repackage</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-        </plugins>
-    </build>
-
 </project>
 ```
 
+### 2.3.1 常见错误与禁止行为（防止乱生成）
+
+- ❌ 禁止使用 `gonbay-platform-*` 作为 artifactId 或 parent 的 artifactId。
+- ❌ 禁止子模块 parent 的 groupId/artifactId 与根 pom 不一致。
+- ❌ 禁止 common 的 artifactId 写成 `gonbay-platform-{project}-common` 或任何非 `gonbay-{project}-common` 的形式。
+- ❌ 禁止 api 的 name 写成 `gonbay-platform-{project}-api`。
+- ❌ 禁止在 server 中擅自添加 spring-boot-maven-plugin、mainClass、webflux、loadbalancer 等；仅保留对 service 的依赖，除非项目已约定可运行 Server。
+- ❌ 禁止在未查阅本项目已有 pom 的前提下，套用其它项目（如 dictionary）的 groupId、artifactId、依赖或 build 配置。
+- ✅ 生成或修改 pom 前，必须先对照本规则与当前项目根目录及各子模块的 pom.xml，保证 parent、groupId、artifactId、modules、依赖与现有约定一致。
+
 **规则**
-- ✅ 严格按照 各个模块的pom.xml模板代码规则初始化 
-- ✅ 严谨输出其他不同的pom内容
-- ✅ 严格按照模块和模块间的依赖方式 （common > api > service > server ）
-- ✅ 禁止擅自扩展各个模块的其他依赖的包
+- ✅ 严格按照 2.3.0 命名与引用约定及各模块 pom 模板初始化或修改 pom。
+- ✅ 严格按照模块依赖顺序：common → api → service → server；子模块间版本统一使用 `${project.parent.version}`。
+- ✅ 禁止擅自扩展或替换各模块已约定的依赖；新增依赖须与项目既有用法一致。
 
 
 ## 2.4 职责代码的模板规范
@@ -629,9 +634,10 @@ public interface DictItemApi {
 - ✅必须遵守 api模板代码生成Api接口类文件
 - ✅必须在api包下创建
 - ✅必须实现 加入@FeignClient 注解
-- ✅ 注释文档必须足够说明内容，详细 采用 @apiNode 写更详细的注
-- ✅ 严格按照 rest 风格定义接口地址和请求方式
-
+- ✅注释文档必须足够说明内容，详细 采用 @apiNode 写更详细的注
+- ✅严格按照 rest 风格定义接口地址和请求方式
+- ✅不允许有事务注解，所有需要一个事务完成的业务逻辑都在 service 中实现
+- ✅只做验证，类型转换，或查询相关业务逻辑，所有更复杂的业务逻辑都需要在 service 中实现
 
 > Server 代码模板规则示例
 
