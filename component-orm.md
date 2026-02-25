@@ -474,7 +474,15 @@ Long nextId = basicService.nextId();
 
 ---
 
-## 13. 违规处理
+## 13. Codex 触发条件
+
+- ✅ 任何 Service 层数据访问必须继承 `BasicService`/`BasicServiceImpl`
+- ✅ 需要动态查询、分页查询时必须使用 BasicService 提供的方法
+- ✅ 字段引用必须使用 `Entity.Fields.fieldName`
+
+---
+
+## 14. 违规处理
 
 如果发现违反本规则的情况：
 1. 立即停止当前操作
@@ -483,7 +491,7 @@ Long nextId = basicService.nextId();
 
 ---
 
-## 14. 规则优先级
+## 15. 规则优先级
 
 本规则优先级：**高**
 - 与其他规则冲突时，以本规则为准

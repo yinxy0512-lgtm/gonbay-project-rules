@@ -506,7 +506,15 @@ public class PendingTaskDTO {
 
 ---
 
-## 10. 违规处理
+## 10. Codex 触发条件
+
+- ✅ DTO/Entity/VO 之间转换出现时必须使用 MapStruct Convert
+- ✅ 动态查询条件出现时必须使用 `DomainInfoParser` 或 `BasicService.dtoInfosToWrapper()`
+- ✅ VO 字段展示或过滤需求出现时必须使用 `@ViewFieldMarked`
+
+---
+
+## 11. 违规处理
 
 如果发现违反本规则的情况：
 1. 立即停止当前操作
@@ -515,7 +523,7 @@ public class PendingTaskDTO {
 
 ---
 
-## 11. 规则优先级
+## 12. 规则优先级
 
 本规则优先级：**高**
 - 与其他规则冲突时，以本规则为准

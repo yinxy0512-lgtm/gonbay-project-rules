@@ -7,7 +7,7 @@
 - **包命名**：API接口统一放置在 `api` 包下，如 `net.gonbay.app.[module].api`
 - **命名规范**：接口名以 `Api` 结尾，如 `ShopUserApi`、`BehaviorRuleApi`
 - **注解要求**：所有API接口必须使用 `@FeignClient` 注解标记
-- **文档注释**：每个接口必须有完整的JavaDoc注释，包含作者信息和功能描述
+- **文档注释**：注释规范统一遵守 `component-doc.md`
 
 ### 1.2 FeignClient配置规范
 
@@ -73,6 +73,14 @@ public class XxxServer implements XxxApi {
 - **类注释**：包含完整的JavaDoc注释和作者信息
 - **字段注入**：按照Service、Converter、Repository等顺序组织
 - **方法实现**：严格按照API接口定义实现
+
+## 2.4 接口定义 -> Server 实现最小检查项
+
+- ✅ Server 必须实现对应 Api 接口
+- ✅ Server 必须使用 `@RestController`
+- ✅ 接口方法参数与返回值保持一致，不擅自调整
+- ✅ 校验注解与验证组与接口保持一致
+- ✅ 返回值统一使用 `Result` 规则（如项目约定）
 
 ## 3. 常量定义规范
 

@@ -29,9 +29,16 @@
 - ❌ 禁止在类型转换、instanceof 判断中使用全类名
 - ❌ 禁止在泛型参数中使用全类名
 
-### 2.3 正例和反例
+### 2.3 常见误用检查清单
 
-#### 2.3.1 方法参数和返回类型
+- ✅ 方法参数、返回类型、变量声明不出现全类名
+- ✅ 泛型参数不出现全类名
+- ✅ `instanceof` 与强制类型转换不出现全类名
+- ✅ `Wrappers.<...>` 泛型不出现全类名
+
+### 2.4 正例和反例
+
+#### 2.4.1 方法参数和返回类型
 
 **❌ 反例：使用全类名**
 
@@ -83,7 +90,7 @@ public class TaskInstanceServer implements TaskInstanceApi {
 }
 ```
 
-#### 2.3.2 类型转换和 instanceof 判断
+#### 2.4.2 类型转换和 instanceof 判断
 
 **❌ 反例：使用全类名**
 
@@ -129,7 +136,7 @@ public void identifyCriticalPaths(List<TaskPathVO> paths, Map<Long, Object> time
 }
 ```
 
-#### 2.3.3 泛型参数
+#### 2.4.3 泛型参数
 
 **❌ 反例：使用全类名**
 
@@ -160,7 +167,7 @@ public void example() {
 }
 ```
 
-#### 2.3.4 Wrappers 泛型参数
+#### 2.4.4 Wrappers 泛型参数
 
 **❌ 反例：使用全类名**
 
@@ -765,4 +772,3 @@ taskInstanceStatusService.checkAndUpdateToPendingComplete(instance, rootTasks);
 2. 状态/编排服务接口改为接收实体或实体列表入参，实现类去掉对另一状态服务的依赖。
 3. 移除未使用的 Service 注入。
 4. 必要时用事件+监听器拆开双向调用，保证依赖为单向。
-

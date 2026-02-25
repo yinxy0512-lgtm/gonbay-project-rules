@@ -6,6 +6,8 @@
 
 本规则定义了 API 层、DTO、VO、DOMAIN 等领域模型的注释规范，以及 Smart-Doc 第三方文档生成组件的使用规范。确保生成的 API 文档清晰、完整、符合项目标准。
 
+> 注释与文档规则以本文件为唯一权威来源，其他规则文件仅作引用说明。
+
 ---
 
 ## 2. 注释生成规则
@@ -839,7 +841,18 @@ List<RouterDictItemVo> getDictItemRouterInfo(@NotNull @RequestBody List<String> 
 
 ---
 
-## 8. 执行优先级
+## 8. Smart-Doc 阻断检查清单
+
+出现以下情况必须停止输出并说明原因：
+
+- 缺少类级注释或 `@restApi` 标记
+- 接口方法缺少 `@extension function`
+- 复合类型入参/出参缺少 `@extension in` 或 `@extension out`
+- DTO/VO/DOMAIN 缺少类级注释或字段注释
+
+---
+
+## 9. 执行优先级
 
 1. **最高优先级**：`@extension function` 必须存在
 2. **高优先级**：`@extension in`、`@extension out`、`@extension query` 必须正确标记
@@ -848,7 +861,7 @@ List<RouterDictItemVo> getDictItemRouterInfo(@NotNull @RequestBody List<String> 
 
 ---
 
-## 9. 合规声明
+## 10. 合规声明
 
 AI 编码助手在执行任何 API 接口、DTO、VO、DOMAIN 相关代码任务时，隐式声明：
 
@@ -856,10 +869,11 @@ AI 编码助手在执行任何 API 接口、DTO、VO、DOMAIN 相关代码任务
 
 ---
 
-## 10. 规则修改与扩展策略
+## 11. 规则修改与扩展策略
 
 AI 编码助手：
-- 不允许修改本规则文件
+- 未经用户明确指示不得修改本规则文件
+- 用户明确指示时允许更新，但必须记录变更原因与范围
 - 不允许主动建议规则变更
 - 不允许推断未来规则方向
 

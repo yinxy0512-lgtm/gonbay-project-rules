@@ -378,7 +378,15 @@ public void saveUser(ShopUser shopUser) {
 
 ---
 
-## 9. 违规处理
+## 9. Codex 触发条件
+
+- ✅ 任何 Redis 相关读写必须使用 `FastRedisClient` 或 `RedissonClientContext`
+- ✅ 需要缓存时必须使用 `@Cacheable`
+- ✅ 需要防重复提交时必须使用 `@NoResubmit`
+
+---
+
+## 10. 违规处理
 
 如果发现违反本规则的情况：
 1. 立即停止当前操作
@@ -387,7 +395,7 @@ public void saveUser(ShopUser shopUser) {
 
 ---
 
-## 10. 规则优先级
+## 11. 规则优先级
 
 本规则优先级：**高**
 - 与其他规则冲突时，以本规则为准
