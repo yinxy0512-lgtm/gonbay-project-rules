@@ -102,8 +102,9 @@ public class XxxServer implements XxxApi {
 ## 4. 验证规范
 
 - **验证分组**：使用 `FormVerifyGroup.Insert` 和 `FormVerifyGroup.Update` 等验证组
-- **参数验证**：在API层进行参数验证，使用 `@Validated` 注解
-- **业务校验**：在Service层进行业务逻辑校验
+- **参数验证**：优先在首个调用入口（API/Server/事件消费者）进行参数合法性校验，使用 `@Validated` 注解
+- **重复校验控制**：同一调用链中禁止重复做同类参数合法性校验，避免冗余与无效性能开销
+- **业务校验**：Service 层以业务语义校验为主；仅在跨边界调用、公共复用方法、异步入口等场景补充最小必要校验
 
 ## 5. 注解使用规范
 
