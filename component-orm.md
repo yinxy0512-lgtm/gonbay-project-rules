@@ -277,9 +277,43 @@ List<WorkFlowTaskVO> listByUserIds(List<String> userIds) {
 }
 ```
 
+#### 7.2.5 列表查询入参约束规则
+
+**规则目的**
+
+约束列表查询类 Service 方法的入参设计，避免使用 `List<VO>`、`List<DTO>`、`List<Domain>` 这类复合对象集合作为查询条件入参，降低方法语义噪音和调用成本。
+
+**必须遵守**
+
+- ✅ 列表查询方法的入参禁止声明为复合对象集合，例如 `List<CraftProcessRelVO>`、`List<ProcessDTO>`、`List<Process>`
+- ✅ 列表查询方法必须以真实查询键作为入参，例如 `ids`、`fkIds`、`codes`、`names`
+- ✅ 方法命名必须体现查询条件语义，例如 `listVoByIds`、`listByCraftIds`、`listVoByIdsWithBindMaterial`
+- ✅ 如果上游当前拿到的是复合对象集合，必须先在调用方完成键提取、去重，再调用下游查询方法
+- ✅ 查询过滤条件必须在查询层完成，禁止将“先全量查再内存过滤”包装成通用查询方法
+
+**禁止示例**
+
+```java
+List<ProcessVO> listVoByCraftProcessRel(List<CraftProcessRelVO> craftProcessRelVos);
+```
+
+**推荐示例**
+
+```java
+List<ProcessVO> listVoByIdsWithBindMaterial(List<Long> processIds);
+```
+
+**原因说明**
+
+- 复合对象集合作为查询入参会掩盖真实查询条件，本质上仍然需要先转换成 ID
+- 这类签名看似灵活，实际增加了方法耦合，调用方和被调用方都要感知上游对象结构
+- 一旦复合对象结构变化，查询方法签名会被无关字段牵连，维护成本高
+- 用基础键入参可以让方法职责单一、边界清晰，也更符合 Service 查询语义
+
 **规则**
 - ✅ 所有列表查询必须使用 `BasicService` 提供的方法
 - ✅ 必须提供结果转换函数
+- ✅ 列表查询方法入参应优先使用基础查询键集合或基础类型组合，禁止使用复合对象集合作为查询条件入参
 - ❌ 禁止直接使用 Mapper 的 list 方法
 
 ### 7.3 单条记录查询方法
