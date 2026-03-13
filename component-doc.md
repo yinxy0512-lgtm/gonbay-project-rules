@@ -319,7 +319,10 @@ PageResult<DictItemVO> pageQuery(@RequestBody DictItemQueryDTO queryDTO);
 
 **规则**
 - ✅ **如果入参实体和出参实体都是领域模型，且其中还有其他领域模型，则必须在注释上标记** `@extension name {具体类型名称}`
-- ✅ **如果某个领域对象实体中有属性是 JsonNode 或者 Map 结构，也需要指定** `@extension name {类型名称}`
+- ✅ **Domain 中数据库 `json` 字段使用 `JsonNode` 时，必须标记** `@extension name JsonNode`
+- ✅ **DTO / VO 因快照、归档、透传等例外场景保留 `JsonNode` 或 `Map` 时，也必须标记** `@extension name {类型名称}`
+- ✅ **承接数据库 `json` 业务结构的 DTO / VO，默认按 `component-domain-convert.md` 设计成更符合业务语义的强类型 DTO / VO，不直接以 `JsonNode` / `Map` 对外暴露**
+- ✅ **JSON 对外可映射为任意更合适的 DTO / VO 结构，不限定为 `Map`；注释规则只负责把最终结构标注清楚**
 - ✅ 如果当前属性类型中还有嵌套的领域模型，则依次复用这个规则（递归标记）
 - ✅ 标记位置：在属性注释中，紧跟在属性说明之后
 
@@ -328,8 +331,8 @@ PageResult<DictItemVO> pageQuery(@RequestBody DictItemQueryDTO queryDTO);
 2. VO 中包含其他 VO/DOMAIN 类型属性
 3. DOMAIN 中包含其他 DOMAIN 类型属性
 4. 集合类型中的元素是领域模型
-5. **属性类型是 JsonNode（如 `com.fasterxml.jackson.databind.JsonNode`）**
-6. **属性类型是 Map（如 `Map<String, String>`、`Map<String, Object>` 等）**
+5. **Domain 中数据库 `json` 字段的类型是 `JsonNode`**
+6. **DTO / VO 在例外场景中保留 `JsonNode` 或 `Map`**
 
 **示例 - DTO 中包含 DTO**
 ```java
@@ -399,40 +402,23 @@ public class DictTypeVO {
 }
 ```
 
-**示例 - 属性类型是 JsonNode**
+**示例 - Domain 中的 JsonNode 字段**
 ```java
 /**
- * 字典项扩展数据
+ * 项目历史版本DOMAIN
  * @author Floatin
  */
 @Data
-public class DictItemExtensionDTO {
+public class HiProjectHistoryVersion {
     /**
-     * 扩展变量，json 类型，可以传任意结构的 json 数据
-     * 根据业务来自定义扩展属性
+     * 项目全量快照JSON
      * @extension name JsonNode
      */
-    private JsonNode variables;
+    private JsonNode dataJson;
 }
 ```
 
-**示例 - 属性类型是 Map**
-```java
-/**
- * 字典项路由信息VO
- * @author Floatin
- */
-@Data
-public class RouterDictItemVo {
-    /**
-     * 路由
-     * @extension name Map
-     */
-    private Map<String, String> routes;
-}
-```
-
-**示例 - VO 中包含 Map 类型（字典元数据）**
+**示例 - Map 类型（元数据字典，非业务 JSON 建模默认正例）**
 ```java
 /**
  * 字典元数据VO
@@ -454,27 +440,32 @@ public class DictMetaVO {
 }
 ```
 
-**示例 - 嵌套多层领域模型（递归标记）**
+**示例 - 稳定业务 JSON 拆专用实体后递归标记**
 ```java
-// 假设 DictItemExtensionDTO 中包含 DictItemDTO
 /**
- * 字典项扩展数据
+ * 产品总成DTO
  * @author Floatin
  */
 @Data
-public class DictItemExtensionDTO {
+public class ProductAssemblyDTO {
     /**
-     * 扩展变量，json 类型，可以传任意结构的 json 数据
-     * 根据业务来自定义扩展属性
-     * @extension name JsonNode
+     * 部件组成
+     * @extension name ProductAssemblyComponentDTO
      */
-    private JsonNode variables;
-    
+    private ProductAssemblyComponentDTO componentPart;
+}
+
+/**
+ * 产品总成部件DTO
+ * @author Floatin
+ */
+@Data
+public class ProductAssemblyComponentDTO {
     /**
-     * 关联的字典项（假设存在）
-     * @extension name DictItemDTO
+     * 部件明细列表
+     * @extension name ProductAssemblyComponentItemDTO
      */
-    private DictItemDTO relatedItem;
+    private List<ProductAssemblyComponentItemDTO> items;
 }
 ```
 
@@ -691,8 +682,10 @@ public class DictItemVO {
 - [ ] 类注释包含 `@author Floatin`
 - [ ] 类注释说明类的用途（DTO/VO/DOMAIN）
 - [ ] 复合类型属性都包含 `@extension name {类型}`
-- [ ] JsonNode 类型属性都包含 `@extension name JsonNode`
-- [ ] Map 类型属性都包含 `@extension name Map`
+- [ ] JsonNode 类型属性（Domain 字段或批准的例外 DTO/VO 字段）都包含 `@extension name JsonNode`
+- [ ] 需求或接口设计中已给出更合适的数据结构 DTO / VO，而不是只写“一个 JSON 字段”
+- [ ] 承接数据库 `json` 业务结构的 DTO / VO 已按 `component-domain-convert.md` 拆分专用实体
+- [ ] Map 类型属性若作为元数据或例外结构对外暴露，已包含 `@extension name Map`
 - [ ] 嵌套的领域模型已递归标记 `@extension name`
 - [ ] 属性注释简洁明了，说明属性用途
 

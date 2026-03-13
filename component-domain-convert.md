@@ -127,11 +127,105 @@ public interface BehaviorRuleConvert {
 
 ---
 
-## 5. DomainInfoParser 使用规范
+## 5. JSON 字段建模与特殊实体映射规则
 
-### 5.1 视图字段信息解析
+### 5.1 适用场景
 
-#### 5.1.1 获取视图字段信息
+- 数据库列类型为 `json`
+- Domain 属性承载结构化 JSON 数据
+- DTO / VO 需要对外展示 JSON 对应的业务结构
+
+### 5.2 核心规则
+
+**Domain 层**
+- ✅ 数据库 `json` 列在 Domain 中必须使用 `JsonNode`
+- ✅ Domain 必须保留数据库原始 JSON 结构，不改成 `String`、`Map`、`List`、`Object` 或 DTO / VO
+- ✅ 字段命名必须有业务语义，优先使用 `xxxJson`、`xxxConfigJson`、`xxxSnapshotJson`、`xxxEntity`
+- ✅ 字段注释必须写清业务含义，并补充 `@extension name JsonNode`
+
+**DTO / VO 层**
+- ✅ 稳定业务 JSON 默认必须拆成更符合业务语义的强类型 DTO / VO，不直接暴露 `JsonNode`、`Map`、`Object`、`String`
+- ✅ JSON 可以转换为任意合适的实体结构，不限定为 `Map`；可按业务语义落为对象 DTO、列表 DTO、嵌套组合 DTO、基础类型列表等可文档化结构
+- ✅ 对象型 JSON 拆成对象实体；数组型 JSON 还原为 `List<...>`；键值型 JSON 也应优先抽象为更合适的 DTO，而不是默认返回 `Map`
+- ✅ 特殊实体必须显式列出字段；嵌套对象、集合继续拆分，并补充 `@extension name`
+- ✅ `Map` 仅可作为 Convert 内部过渡结构，或非业务元数据 / 明确例外场景下的输出结构；不是规则库推荐的默认 API 建模
+
+**禁止行为**
+- ❌ 数据库 `json` 列在 Domain 中定义为 `String`、`Map`、`List`、`Object`
+- ❌ 稳定业务 JSON 在 DTO / VO 中直接暴露为 `JsonNode`、`Map<String, Object>`、`Map<String, String>`、`Object`
+
+### 5.3 需求建模约束
+
+- ✅ 需求、接口设计或任务描述中，只要出现“数据库 `json` 字段需要对外提供业务结构”，就必须同步给出更合适的数据结构 DTO / VO
+- ✅ DTO / VO 的设计目标是表达业务语义，而不是单纯承接一段 JSON 文本
+- ✅ 如果需求只写“传一个 JSON”“返回一个 JSON”，未给字段结构，必须先补齐推荐 DTO / VO 结构后再实现
+- ✅ 若当前阶段无法稳定建模，必须按例外场景处理，并写明原因
+
+### 5.4 例外场景
+
+- ✅ 仅历史快照、全量归档、原样透传、暂时无法穷举结构的外部协议报文可在 DTO / VO 保留 `JsonNode`
+- ✅ 例外字段必须在注释中写明“快照 JSON / 全量数据 JSON / 原样透传 JSON”等语义
+- ❌ 不能以“灵活”“前端自己解析”为由，把稳定业务 JSON 继续暴露成 `JsonNode` 或 `Map`
+
+### 5.5 Convert 收口规则
+
+- ✅ DTO -> Domain：在 Convert 中把特殊实体转换为 `JsonNode`
+- ✅ Domain -> VO：在 Convert 中把 `JsonNode` 转换为特殊实体
+- ✅ JSON 解析与序列化统一使用 `JsonUtil`
+- ✅ Convert 的 `default` 方法可处理结构兼容、格式清洗、旧数据兼容
+- ❌ Service / Server 不负责 JSON 解析、拼装，不直接处理业务 JSON 的 `JsonUtil.toNode()` / `JsonUtil.fromByNode()`
+
+### 5.6 建模示例
+
+- `componentPartJson(JsonNode)` -> `ProductAssemblyComponentDTO`
+- `specValue(JsonNode)` -> `List<String> specValues`
+- `pricingRuleJson(JsonNode)` -> `ProductPricingRuleDTO`
+- `extAttrsJson(JsonNode)` -> `List<ProductExtAttrItemDTO>`
+
+> 结论：JSON 对外可以转换为任意更合适的强类型结构，关键是业务语义清晰、字段完整、可文档化，而不是固定使用 `Map`。
+
+### 5.7 标准示例
+
+```java
+@Mapper(
+    nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE,
+    uses = {BasicStructMapper.class},
+    componentModel = "spring"
+)
+public interface ProductAssemblyConvert {
+
+    @Mapping(target = "componentPartJson", expression = "java(toComponentPartJson(dto.getComponentPart()))")
+    ProductAssembly toDomain(ProductAssemblyDTO dto);
+
+    @Mapping(target = "componentPart", expression = "java(toComponentPartVo(domain.getComponentPartJson()))")
+    ProductAssemblyVO toVo(ProductAssembly domain);
+
+    default JsonNode toComponentPartJson(ProductAssemblyComponentDTO dto) {
+        return JsonUtil.toNode(dto);
+    }
+
+    default ProductAssemblyComponentVO toComponentPartVo(JsonNode jsonNode) {
+        return JsonUtil.fromByNode(jsonNode, ProductAssemblyComponentVO.class);
+    }
+}
+```
+
+### 5.8 快速检查
+
+- [ ] Domain 的 `json` 字段是否为 `JsonNode`
+- [ ] 需求中是否已给出更合适的数据结构 DTO / VO
+- [ ] DTO / VO 是否已拆专用特殊实体
+- [ ] 特殊实体字段与层级是否完整可文档化
+- [ ] JSON 转换是否全部收口在 Convert
+- [ ] Service / Server 是否未手写 JSON 解析
+
+---
+
+## 6. DomainInfoParser 使用规范
+
+### 6.1 视图字段信息解析
+
+#### 6.1.1 获取视图字段信息
 
 ```java
 import net.gonbay.basic.utils.util.DomainInfoParser;
@@ -143,7 +237,7 @@ List<ViewFieldInfo> viewFields = DomainInfoParser.getViewFieldInfos(VoClass.clas
 List<ViewFieldInfo> visibleFields = DomainInfoParser.getViewFieldInfosByVisibled(VoClass.class, true);
 ```
 
-#### 5.1.2 VO 类定义规范
+#### 6.1.2 VO 类定义规范
 
 ```java
 @Data
@@ -165,16 +259,16 @@ public class UserVO {
 - ✅ `visibled` 属性控制字段是否可见
 - ✅ `isDbMapped` 属性标识字段是否映射到数据库
 
-### 5.2 传输字段信息解析
+### 6.2 传输字段信息解析
 
-#### 5.2.1 获取传输字段信息
+#### 6.2.1 获取传输字段信息
 
 ```java
 // 获取 DTO 中的查询条件信息
 List<TransferFieldInfo> transferFields = DomainInfoParser.getTransferFieldInfos(dto);
 ```
 
-#### 5.2.2 DTO 类定义规范
+#### 6.2.2 DTO 类定义规范
 
 ```java
 public class PendingTaskDTO {
@@ -199,7 +293,7 @@ public class PendingTaskDTO {
 }
 ```
 
-#### 5.2.3 @TransferFieldMarked 注解属性
+#### 6.2.3 @TransferFieldMarked 注解属性
 
 - `value()`：查询字段名称（默认：空字符串）
 - `isQueryField()`：是否是查询条件属性（默认：true）
@@ -218,11 +312,11 @@ public class PendingTaskDTO {
 
 ---
 
-## 6. ORM 查询条件组装规范
+## 7. ORM 查询条件组装规范
 
-### 6.1 使用 BasicService.dtoInfosToWrapper()
+### 7.1 使用 BasicService.dtoInfosToWrapper()
 
-#### 6.1.1 基本用法
+#### 7.1.1 基本用法
 
 ```java
 @Service
@@ -243,7 +337,7 @@ public class SomeBusinessService extends BasicServiceImpl<SomeMapper, SomeEntity
 }
 ```
 
-#### 6.1.2 自定义查询条件构建
+#### 7.1.2 自定义查询条件构建
 
 ```java
 @Repository
@@ -271,9 +365,9 @@ public class CustomQueryService {
 - ❌ 禁止将简单等值查询强制包装为仅用于查询的 QueryDTO
 - ❌ 除简单等值查询外，禁止在 Service 层直接使用 MyBatis-Plus 的 Wrapper
 
-### 6.2 使用 DomainInfoParser 手动构建
+### 7.2 使用 DomainInfoParser 手动构建
 
-#### 6.2.1 手动构建查询条件
+#### 7.2.1 手动构建查询条件
 
 ```java
 @Service
@@ -306,9 +400,9 @@ public class SomeService {
 - ✅ 必须使用 `DomainInfoParser.getTransferFieldInfos()` 解析 DTO
 - ❌ 禁止直接操作 Wrapper，必须通过工具类
 
-### 6.3 FormCondition 动态查询
+### 7.3 FormCondition 动态查询
 
-#### 6.3.1 使用 FormCondition
+#### 7.3.1 使用 FormCondition
 
 ```java
 // 使用 FormCondition 进行动态查询
@@ -326,11 +420,11 @@ public PageResult<Entity> queryWithFormCondition(PageRequestForm<FormCondition> 
 
 ---
 
-## 7. 批量 DTO 转 Domain 的 Convert 实现方式
+## 8. 批量 DTO 转 Domain 的 Convert 实现方式
 
 当批量插入场景存在「批量 DTO（公共属性 + 集合）」且需在 Convert 中完成公共属性与派生字段（如 createTime）赋值时，可采用以下两种实现方式。
 
-### 7.1 方式一：批量 default 方法内集中赋值
+### 8.1 方式一：批量 default 方法内集中赋值
 
 **做法**：单条映射方法仅做「项 DTO → Domain」字段映射（不含 createTime、公共 ID 等）；批量 default 方法内循环调用单条映射后，在同一处对每条 Domain 统一 `setCreateTime`、`setDagInstanceId`、`setDagType` 等。
 
@@ -356,7 +450,7 @@ default List<TaskTimeCheckpoint> batchDtoToDomains(TaskTimeCheckpointBatchDTO dt
 | **优点** | 批量逻辑集中在一个 default 方法；单条 `itemDtoToDomain` 保持纯 MapStruct 生成，只做字段映射；实现简单 |
 | **缺点** | createTime、公共 ID 等均在 default 里手写 set，未通过 `@Mapping` 声明，可读性、可追溯性略弱；若单条也需要「带公共信息」转换，须在 Service 或另写方法 |
 
-### 7.2 方式二：单条用 @Mapping 设 createTime，拆出「带公共信息」default 方法
+### 8.2 方式二：单条用 @Mapping 设 createTime，拆出「带公共信息」default 方法
 
 **做法**：单条映射方法用 `@Mapping(target = "createTime", expression = "java(TimeUtil.now())")` 统一设置 createTime；再提供 default 方法「项 DTO + 公共参数 → Domain」，内部调用单条映射后仅 `setDagInstanceId`、`setDagType`；批量 default 方法只做遍历与调用该「带公共信息」方法并收集结果。
 
@@ -387,7 +481,7 @@ default List<TaskTimeCheckpoint> batchDtoToDomains(TaskTimeCheckpointBatchDTO dt
 | **优点** | createTime 由 MapStruct 注解统一设置，与 BaseModel 约定一致、语义清晰；「带公共信息」的 `itemDtoDagInfoToDomain` 可复用于单条与批量；`batchDtoToDomains` 只做遍历与收集，职责单一 |
 | **缺点** | 多一个 default 方法；dagInstanceId、dagType 仍为手写 set，若需完全由 MapStruct 表达可考虑多参数映射方法（如 `itemDtoToDomain(ItemDTO item, Long dagInstanceId, String dagType)` 并配合 `@Mapping(target = "dagInstanceId", source = "dagInstanceId")`） |
 
-### 7.3 规则与推荐
+### 8.3 规则与推荐
 
 **规则**
 - ✅ 批量 DTO 转 Domain 列表应在 Convert 中完成，Service 只负责调用 `batchDtoToDomains(dto)` 与 `saveBatch(list)`，不在 Service 内循环赋值公共/派生字段
@@ -399,7 +493,7 @@ default List<TaskTimeCheckpoint> batchDtoToDomains(TaskTimeCheckpointBatchDTO dt
 
 ---
 
-### 7.4 Service 与 Convert 职责边界（强制）
+### 8.4 Service 与 Convert 职责边界（强制）
 
 **必须遵守**
 - ✅ Service 层只负责流程编排（校验、事务、调用顺序、持久化调用），不得承担 DTO/Domain/VO 间转换细节
@@ -414,9 +508,9 @@ default List<TaskTimeCheckpoint> batchDtoToDomains(TaskTimeCheckpointBatchDTO dt
 
 ---
 
-## 8. 使用场景
+## 9. 使用场景
 
-### 8.1 适用场景
+### 9.1 适用场景
 
 - ✅ DTO 与 Entity 之间的转换
 - ✅ Entity 与 VO 之间的转换
@@ -424,7 +518,7 @@ default List<TaskTimeCheckpoint> batchDtoToDomains(TaskTimeCheckpointBatchDTO dt
 - ✅ 元数据解析（视图字段、查询字段）
 - ✅ 快速查询封装
 
-### 8.2 禁止场景
+### 9.2 禁止场景
 
 - ❌ 禁止在转换器中编写业务逻辑
 - ❌ 禁止手动编写对象转换代码
@@ -432,9 +526,9 @@ default List<TaskTimeCheckpoint> batchDtoToDomains(TaskTimeCheckpointBatchDTO dt
 
 ---
 
-## 9. 示例代码
+## 10. 示例代码
 
-### 9.1 MapStruct 转换器完整示例
+### 10.1 MapStruct 转换器完整示例
 
 ```java
 @Mapper(
@@ -493,7 +587,7 @@ public interface BehaviorRuleConvert {
 }
 ```
 
-### 9.2 查询条件 DTO 完整示例
+### 10.2 查询条件 DTO 完整示例
 
 ```java
 public class PendingTaskDTO {
@@ -526,7 +620,7 @@ public class PendingTaskDTO {
 
 ---
 
-## 10. Codex 触发条件
+## 11. Codex 触发条件
 
 - ✅ DTO/Entity/VO 之间转换出现时必须使用 MapStruct Convert
 - ✅ 动态查询条件出现时必须使用 `DomainInfoParser` 或 `BasicService.dtoInfosToWrapper()`
@@ -534,7 +628,7 @@ public class PendingTaskDTO {
 
 ---
 
-## 11. 违规处理
+## 12. 违规处理
 
 如果发现违反本规则的情况：
 1. 立即停止当前操作
@@ -543,7 +637,7 @@ public class PendingTaskDTO {
 
 ---
 
-## 12. 规则优先级
+## 13. 规则优先级
 
 本规则优先级：**高**
 - 与其他规则冲突时，以本规则为准
