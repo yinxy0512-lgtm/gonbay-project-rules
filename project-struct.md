@@ -59,7 +59,7 @@ gonbay-{project}
 - gonbay-{project}-common 该模块存放当前项目中公共的代码文件例如（domain、errcode、enums、constat 等）
 - gonbay-{project}-api 该模块存放所有对外暴露的 api 接口、dto、vo
 - gonbay-{project}-service 该模块存放所有业务逻辑实现和 orm 交互，是整个项目最核心的模块
-- gonbay-{project}-server 该模块只负责写单元测试，只对 gonbay-{project}-service 依赖；可仅有 src/main/resources（如 application.yml）和 src/test，无 src/main/java 或可执行入口，禁止擅自添加 Spring Boot 启动类或打包插件
+- gonbay-{project}-server 该模块作为测试与运行配置承载模块，只对 gonbay-{project}-service 依赖；默认不要求每个业务变更都同步编写单元测试，只有用户明确要求或高风险改造时才补充测试；可仅有 src/main/resources（如 application.yml）和 src/test，无 src/main/java 或可执行入口，禁止擅自添加 Spring Boot 启动类或打包插件
 
 **当前项目参考（gonbay-task-engine）**
 
@@ -318,7 +318,7 @@ gonbay-{project}
 
 **server：gonbay-{project}-server/pom.xml**
 
-- 职责：仅依赖 service、编写并运行对 service/api 的单元测试；可不包含可运行 Spring Boot 应用的 main 或打包配置。
+- 职责：仅依赖 service，承载测试代码与运行配置；默认不要求每个业务变更都同步编写单元测试，只有用户明确要求或高风险改造时才补充测试；可不包含可运行 Spring Boot 应用的 main 或打包配置。
 
 - parent 同上；artifactId = `gonbay-{project}-server`。
 
