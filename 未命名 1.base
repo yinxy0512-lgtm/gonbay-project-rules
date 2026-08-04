@@ -1,0 +1,8 @@
+formulas:
+  测试1: ""
+views:
+  - type: table
+    name: 表格
+    order:
+      - file.name
+      - formula.测试1

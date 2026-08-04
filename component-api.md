@@ -1,5 +1,8 @@
 # Gonbay Core API与Server开发规范
 
+
+[[component-doc]]
+
 ## 1. API接口规范
 
 ### 1.1 接口定义规范
